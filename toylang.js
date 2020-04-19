@@ -21,11 +21,10 @@ const TSTATE_SYMBOL = Symbol('TSTATE_SYMBOL');
 const TSTATE_ESCAPE = Symbol('TSTATE_ESCAPE');
 
 class Tokenizer {
-    constructor(str) {
-        this.str = str;
-    }
 
-    *tokenize() {
+    *tokenize(str) {
+        this.str = str;
+
         var value = "";
 
         this.lineCount = 0;
@@ -164,10 +163,6 @@ ${pointer}
 }
 
 class Parser {
-    constructor(str) {
-        this.tokenizer = new Tokenizer(str);
-        this.tokengen = this.tokenizer.tokenize();
-    }
 
     next() {
         return this.tokengen.next().value;
@@ -191,7 +186,10 @@ class Parser {
         }
     }
 
-    parse() {
+    parse(str) {
+        this.tokenizer = new Tokenizer();
+        this.tokengen = this.tokenizer.tokenize(str);
+
         this.expect(this.next(), Token.LPAREN);
         return this.sexpression();
     }
@@ -331,11 +329,10 @@ const doit = program => {
 
     env.set('+', (...args) => args.reduce((a, b) => a + b, 0));
     env.set('-', (head, ...tail) => head - tail.reduce((a, b) => a + b, 0));
-    env.set('x', 5);
     // console.log('environment', env);
 
-    var p = new Parser(program);
-    var sexp = p.parse();
+    var p = new Parser();
+    var sexp = p.parse(program);
     // console.log('Evaluating expression', sexp);
     return eval(sexp, env);
 }
