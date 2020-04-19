@@ -284,13 +284,27 @@ const eval = (sexpression, environment) => {
 
     switch(typeof(head)) {
         case "symbol":
-            let binding = environment.get(head.description);
-            if(typeof(binding) == "function") {
-                // note that tail may be an empty array
-                let tail = sexpression.slice(1);
-                return apply(binding, tail, environment);
-            } else {
-                return binding;
+            switch(head.description) {
+                case "let":
+                    let subexpr = sexpression[sexpression.length-1];
+                    let newenv = new Environment();
+                    newenv.parent = environment;
+                    let bindings = sexpression.slice(1, -1);
+                    for(let binding of bindings) {
+                        let value = eval(binding[1], newenv);
+                        let symbolname = binding[0].description;
+                        newenv.set(symbolname, value);
+                    }
+                    return eval(subexpr, newenv);
+                default:
+                    let binding = environment.get(head.description);
+                    if(typeof(binding) == "function") {
+                        // note that tail may be an empty array
+                        let tail = sexpression.slice(1);
+                        return apply(binding, tail, environment);
+                    } else {
+                        return binding;
+                    }
             }
             break;
         case "number":
@@ -312,7 +326,7 @@ const apply = (fn, args, environment) => {
     return fn(...args);
 }
 
-const doit = (program) => {
+const doit = program => {
     const env = new Environment();
 
     env.set('+', (...args) => args.reduce((a, b) => a + b, 0));
@@ -324,4 +338,9 @@ const doit = (program) => {
     var sexp = p.parse();
     // console.log('Evaluating expression', sexp);
     return eval(sexp, env);
+}
+
+const justparse = program => {
+    var p = new Parser(program);
+    return p.parse();
 }
