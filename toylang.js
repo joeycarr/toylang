@@ -150,7 +150,11 @@ class TokenizerError extends Error {
     constructor(tokenizer, message) {
         var lines = tokenizer.str.split('\n');
         var line = lines[tokenizer.lineCount];
-        var pointer = '-'.repeat(tokenizer.lineCharCount) + '^';
+        var pointer;
+        if(tokenizer.lineCharCount > 0)
+            pointer = '-'.repeat(tokenizer.lineCharCount) + '^';
+        else
+            pointer = '^';
         super(`${message}
 Line ${tokenizer.lineCount} character ${tokenizer.lineCharCount}
 ${line}
@@ -166,13 +170,17 @@ class Parser {
     }
 
     next() {
-        var result = this.tokengen.next();
-        if(!result.done) {
-            return result.value;
-        }
+        return this.tokengen.next().value;
     }
 
     expect(token, type) {
+        if(token == undefined) {
+            throw new ParserError(
+                this.tokenizer,
+                null,
+                `No more tokens in the stream?`
+            )
+        }
         if(token.type == type) {
             // do nothing
         } else {
@@ -203,7 +211,11 @@ class Parser {
             }
             token = this.next();
         }
-        console.error("How do we get here?");
+        throw new ParserError(
+            this.tokenizer,
+            null,
+            "Missing the balancing right parenthesis."
+        )
     }
 }
 
@@ -212,8 +224,14 @@ class ParserError extends Error {
     constructor(tokenizer, token, message) {
         var lines = tokenizer.str.split('\n');
         var line = lines[tokenizer.lineCount];
-        var pointer = '-'.repeat(tokenizer.lineCharCount - token.rawlength)
-            + '^';
+        var rawlength = 0;
+        if(token)
+            rawlength = token.rawlength;
+        var pointer;
+        if(tokenizer.lineCharCount > 0)
+            pointer = '-'.repeat(tokenizer.lineCharCount-rawlength) + '^';
+        else
+            pointer = '^';
         super(`${message}
 Line ${tokenizer.lineCount} character ${tokenizer.lineCharCount}
 ${line}
