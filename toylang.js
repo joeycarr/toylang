@@ -1,8 +1,9 @@
 
 class Token {
-    constructor(type, value) {
+    constructor(type, value, rawlength) {
         this.type = type;
         this.value = value;
+        this.rawlength = rawlength;
     }
 }
 
@@ -36,8 +37,6 @@ class Tokenizer {
         while(this.charCount < this.str.length) {
             let char = this.str.charAt(this.charCount);
 
-            //console.log('tokenizing...', state);
-
             switch(state) {
                 case TSTATE_BASE:
                     if(char.trim() == '')
@@ -45,10 +44,10 @@ class Tokenizer {
 
                     switch(char) {
                         case '(':
-                            yield new Token(Token.LPAREN, '(');
+                            yield new Token(Token.LPAREN, '(', 1);
                             break;
                         case ')':
-                            yield new Token(Token.RPAREN, ')');
+                            yield new Token(Token.RPAREN, ')', 1);
                             break;
                         case '"':
                             state = TSTATE_STRING;
@@ -77,7 +76,8 @@ class Tokenizer {
                             break;
                         case '"':
                             state = TSTATE_BASE;
-                            yield new Token(Token.STRING, value);
+                            yield new Token(
+                                Token.STRING, value, value.length+2);
                             value = '';
                             break;
                         default:
@@ -91,13 +91,19 @@ class Tokenizer {
                         value += char;
                     } else if(char.trim() == '') {
                         state = TSTATE_BASE;
-                        yield new Token(Token.NUMBER, Number.parseFloat(value));
-                        value = ""
+                        yield new Token(
+                            Token.NUMBER,
+                            Number.parseFloat(value),
+                            value.length);
+                        value = '';
                     } else if(char == ')') {
                         state = TSTATE_BASE;
-                        yield new Token(Token.NUMBER, Number.parseFloat(value));
+                        yield new Token(
+                            Token.NUMBER,
+                            Number.parseFloat(value),
+                            value.length);
                         value = '';
-                        yield new Token(Token.RPAREN, ')');
+                        yield new Token(Token.RPAREN, ')', 1);
                     } else {
                         throw new TokenizerError(this, "Unexpected character in numeric literal")
                     }
@@ -106,13 +112,13 @@ class Tokenizer {
                 case TSTATE_SYMBOL:
                     if(char.trim() == '') {
                         state = TSTATE_BASE;
-                        yield new Token(Token.SYMBOL, value);
+                        yield new Token(Token.SYMBOL, Symbol(value), value.length);
                         value = '';
                     } else if (char == ')') {
                         state = TSTATE_BASE;
-                        yield new Token(Token.SYMBOL, value);
+                        yield new Token(Token.SYMBOL, Symbol(value), value.length);
                         value = '';
-                        yield new Token(Token.RPAREN, ')');
+                        yield new Token(Token.RPAREN, ')', 1);
                     } else {
                         value += char;
                     }
@@ -153,57 +159,73 @@ ${pointer}
     }
 }
 
-
-var t = new Tokenizer('(-6.022e23 bang "wang" bang (fwing))');
-
-for(let token of t.tokenize()) {
-    console.log(token);
-}
-
 class Parser {
     constructor(str) {
+        this.tokenizer = new Tokenizer(str);
+        this.tokengen = this.tokenizer.tokenize();
     }
 
     next() {
+        var result = this.tokengen.next();
+        if(!result.done) {
+            return result.value;
+        }
     }
 
-    expect(token) {
-        if(this.next() == token) {
+    expect(token, type) {
+        if(token.type == type) {
             // do nothing
         } else {
-            // ...
+            throw new ParserError(
+                this.tokenizer,
+                token,
+                `Expected a token of type '${type.description}', found '${token.type.description}'`);
         }
     }
 
     parse() {
-        expect("(");
-        expect(")");
+        this.expect(this.next(), Token.LPAREN);
+        return this.sexpression();
+    }
+
+    sexpression() {
+        var result = new Array();
+        var token = this.next();
+        while(token !== undefined){
+            switch(token.type) {
+                case Token.RPAREN:
+                    return result;
+                case Token.LPAREN:
+                    result.push(this.sexpression());
+                    break;
+                default:
+                    result.push(token.value);
+            }
+            token = this.next();
+        }
+        console.error("How do we get here?");
     }
 }
 
 
-class SExpression {
-    constructor(head, tail) {
-        this._head = head;
-        this._tail = tail;
-    }
-
-    get head() {
-        return this._head;
-    }
-
-    get tail() {
-        return this._tail;
-    }
-
-    /**
-     * Parses a simplified s-expression syntax that ignores pairs and just
-     * focuses on lists.
-     */
-    static read(str) {
-
+class ParserError extends Error {
+    constructor(tokenizer, token, message) {
+        var lines = tokenizer.str.split('\n');
+        var line = lines[tokenizer.lineCount];
+        var pointer = '-'.repeat(tokenizer.lineCharCount - token.rawlength)
+            + '^';
+        super(`${message}
+Line ${tokenizer.lineCount} character ${tokenizer.lineCharCount}
+${line}
+${pointer}
+`);
     }
 }
+
+var p = new Parser('(-6.022e23 sym1 "string value" sym2 (sym3))');
+
+console.log(p.parse());
+
 
 class Environment extends Map {
 
