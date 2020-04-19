@@ -240,10 +240,6 @@ ${pointer}
     }
 }
 
-var p = new Parser('(-6.022e23 sym1 "string value" sym2 (sym3))');
-
-console.log(p.parse());
-
 
 class Environment extends Map {
 
@@ -274,9 +270,58 @@ class Environment extends Map {
 
 
 const eval = (sexpression, environment) => {
+    // for now, sexpressions are arrays
+
+    if(sexpression.length == 0) {
+        return null; // empty list, "()", is equivalent to null
+    }
+
+    var head;
+    if(sexpression instanceof Array)
+        head = sexpression[0];
+    else
+        head = sexpression
+
+    switch(typeof(head)) {
+        case "symbol":
+            let binding = environment.get(head.description);
+            if(typeof(binding) == "function") {
+                // note that tail may be an empty array
+                let tail = sexpression.slice(1);
+                return apply(binding, tail, environment);
+            } else {
+                return binding;
+            }
+            break;
+        case "number":
+        case "string":
+            if(sexpression.length > 1)
+                throw new Error("Primitives aren't callable.")
+            return head;
+        default:
+            console.error("Found weird head in sexpression", head)
+            // throw new Error("Unexpected type in s-expression.")
+    }
 
 }
 
-const apply = (fn, args) => {
+const apply = (fn, args, environment) => {
+    // console.log('applying fn to args', fn, args);
 
+    args = args.map(x => eval(x, environment));
+    return fn(...args);
+}
+
+const doit = (program) => {
+    const env = new Environment();
+
+    env.set('+', (...args) => args.reduce((a, b) => a + b, 0));
+    env.set('-', (head, ...tail) => head - tail.reduce((a, b) => a + b, 0));
+    env.set('x', 5);
+    // console.log('environment', env);
+
+    var p = new Parser(program);
+    var sexp = p.parse();
+    // console.log('Evaluating expression', sexp);
+    return eval(sexp, env);
 }
